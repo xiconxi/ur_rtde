@@ -1,18 +1,30 @@
 #!/usr/bin/python
 import sys
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import QRect, QSize
+from PyQt5.QtCore import QRect, QSize, QThread, pyqtSlot, pyqtSignal
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QDialog, QWidget, QLabel, QApplication, QMainWindow
 from pyvistaqt import QtInteractor
 import numpy as np 
 import pyvista as pv
 import vtk 
- 
 
+import numpy as np
 from functools import partial
 
+import rtde_control
+import rtde_receive
+
+import socket
+
+
 url = "./URController/icons/"
+UR_IP = "192.168.1.102"
+
+
+# rtde_c = rtde_control.RTDEControlInterface(UR_IP)
+# rtde_r = rtde_receive.RTDEReceiveInterface(UR_IP)
+
 
 class SceneViewer(QtInteractor):
     def __init__(self, parent):
@@ -35,9 +47,11 @@ class SceneViewer(QtInteractor):
         #     _prop.SetDiffuse(0.75)
         #     _prop.SetOpacity(1.0)
         return actor
+    
 
 class URRtdeGui(QDialog):
     def __init__(self, pose = np.r_[0, 0, 0, 1, 0, 0]):
+
         super().__init__()
         self.setWindowTitle('UR-TRDE RPY Controller')
         self.initUI()
@@ -45,25 +59,31 @@ class URRtdeGui(QDialog):
         self.visual.link_views()
         # self.visual.show_bounds(self.tms_coil)
         # self.visual.show_axes()
-        # self.visual.tot
 
+        # self.tms_coil.SetPosition(np.array(rtde_r.GetActualTCPPose())[:3])
+        print(self.tms_coil.GetOrientationWXYZ())
+        print(self.tms_coil.GetPosition())
     
     def axis_rotate(self, axis='r', dir = 1):
-        print(self.tms_coil.GetOrientationWXYZ())
-
         if axis == 'r':
             self.tms_coil.RotateX(6*dir)
         elif axis == 'p':
             self.tms_coil.RotateY(6*dir)
         elif axis == 'y':
             self.tms_coil.RotateZ(6*dir)
-        print(self.tms_coil.GetOrientationWXYZ())
+
+        pos = self.tms_coil.GetPosition()
+        wxyz = self.tms_coil.GetOrientationWXYZ()
+
+        coil_pose = np.concatenate( [  pos, wxyz[1:], [0.5, 0.5, 0]] )
+        coil_pose[3:6] *= wxyz[0]/360*np.pi*2
+        # rtde_c.moveL( [ coil_pose ] )
+
     def axis_translate(self, axis='x', dir = 1):
-        pass 
-        # if axis == 'x':
-        #     self.tms_coil.translate(np.r_[dir*0.0005, 0, 0])
-        # elif axis == 'y':
-        #     self.tms_coil.translate(np.r_[0, dir*0.0005, 0])
+        if axis == 'x':
+            self.tms_coil.AddPosition(np.r_[dir*0.0005, 0, 0])
+        elif axis == 'y':
+            self.tms_coil.AddPosition(np.r_[0, dir*0.0005, 0])
 
     def initUI(self):
         self.resize(600+10, 700)
